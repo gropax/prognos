@@ -24,9 +24,9 @@ namespace Prognos.Engine
                 Match match = _scrapCmdRegex.Match(input);
                 if (match.Success)
                 {
-                    string eventId = match.Groups[1].Value;
+                    long eventId = long.Parse(match.Groups[1].Value);
                     scraperManagerActor.Tell(new ScrapingCommand(
-                        new PlatformEvent(Platform.Winamax, eventId),
+                        new Core.Winamax.WinamaxEvent(eventId, Core.Sport.Football, "", "", new DateTime()),
                         new ScrapingOptions(
                             scrapInterval: TimeSpan.FromSeconds(5))));
                 }

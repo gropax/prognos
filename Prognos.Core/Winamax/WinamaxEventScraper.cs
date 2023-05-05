@@ -1,5 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Prognos.Core;
+using Prognos.Core.Winamax;
 using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
@@ -9,21 +11,21 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace Prognos.Engine
+namespace Prognos.Core.Winamax
 {
     public interface IPlatformEventScraper
     {
-        Page Page { get; }
+        IPage Page { get; }
         Task<OutcomesSnapshot> ScrapPage();
         Task SubscribeToLive(Action<LiveOddsUpdate> callback);
     }
 
     public class WinamaxEventScraper : IPlatformEventScraper
     {
-        public Page Page { get; }
-        private readonly PlatformEvent _platformEvent;
+        public IPage Page { get; }
+        private readonly WinamaxEvent _platformEvent;
 
-        public WinamaxEventScraper(Page page, PlatformEvent platformEvent)
+        public WinamaxEventScraper(IPage page, WinamaxEvent platformEvent)
         {
             Page = page;
             _platformEvent = platformEvent;
@@ -82,7 +84,7 @@ namespace Prognos.Engine
             return new OutcomesSnapshot(
                 @event: _platformEvent,
                 createdAt: DateTime.Now,
-                state: isLive ? PlatformEventState.Live : PlatformEventState.Open,  // @todo
+                state: isLive ? EventState.Live : EventState.Open,  // @todo
                 outcomes: outcomes);
         }
 
@@ -90,7 +92,7 @@ namespace Prognos.Engine
 
         public string PageUri()
         {
-            return $"https://www.winamax.fr/paris-sportifs/match/live/{_platformEvent.PlatformId}";
+            return $"https://www.winamax.fr/paris-sportifs/match/live/{_platformEvent.Id}";
         }
 
         private static Regex _updateRegex = new Regex(@"^42\[""m"",(.*)\]$");
@@ -111,7 +113,7 @@ namespace Prognos.Engine
                     dynamic json = JsonConvert.DeserializeObject(data);
 
                     var node = json["matches"];
-                    node = node[_platformEvent.PlatformId];
+                    node = node[_platformEvent.Id];
                     node = node["matchtimeExtended"];
                     string eventTimeStr = node.ToString();
 
@@ -184,22 +186,6 @@ namespace Prognos.Engine
             var mostFreqPrefix = countDict[maxFreq].First();
 
             return outcomes.Where(o => o.Id.StartsWith(mostFreqPrefix)).ToArray();
-        }
-    }
-
-    public struct Outcome
-    {
-        public string Id { get; }
-        public string Code { get; }
-        public string Label { get; }
-        public float Odd { get; }
-
-        public Outcome(string id, string code, string label, float odd)
-        {
-            Id = id ?? throw new ArgumentNullException(nameof(id));
-            Code = code ?? throw new ArgumentNullException(nameof(code));
-            Label = label ?? throw new ArgumentNullException(nameof(label));
-            Odd = odd;
         }
     }
 }

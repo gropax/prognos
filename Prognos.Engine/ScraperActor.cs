@@ -1,4 +1,6 @@
 ﻿using Akka.Actor;
+using Prognos.Core;
+using Prognos.Core.Winamax;
 using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
@@ -11,7 +13,7 @@ namespace Prognos.Engine
         private readonly IPlatformEventScraper _scraper;
         private readonly ScrapingOptions _options;
 
-        private PlatformEventState _eventState;
+        private EventState _eventState;
         private readonly ICancelable _cancelScraping;
 
         public ScraperActor(IPlatformEventScraper scraper, ScrapingOptions options)
@@ -33,7 +35,7 @@ namespace Prognos.Engine
 
                 Context.Parent.Forward(update);
 
-                if (_eventState == PlatformEventState.Open && update.State == PlatformEventState.Live)
+                if (_eventState == EventState.Open && update.State == EventState.Live)
                 {
                     _cancelScraping.Cancel(false);
                     _scraper.SubscribeToLive(u => {
@@ -41,7 +43,7 @@ namespace Prognos.Engine
                     });
                     _eventState = update.State;
                 }
-                else if (update.State == PlatformEventState.Ended)
+                else if (update.State == EventState.Ended)
                 {
                     Context.Parent.Tell(new RecyclePage(_scraper.Page));
                     Context.Stop(Self);

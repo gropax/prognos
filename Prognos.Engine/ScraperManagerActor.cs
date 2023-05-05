@@ -1,4 +1,5 @@
 ﻿using Akka.Actor;
+using Prognos.Core.Winamax;
 using PuppeteerSharp;
 using System;
 using System.Collections.Generic;
@@ -9,14 +10,14 @@ namespace Prognos.Engine
 {
     public class ScraperManagerActor : ReceiveActor
     {
-        private Browser _browser;
-        private readonly Dictionary<Guid, ScrapingInfo> _childrenByGuid;
+        private IBrowser _browser;
+        private readonly Dictionary<long, ScrapingInfo> _childrenByGuid;
         private readonly Dictionary<IActorRef, ScrapingInfo> _childrenByActor;
         private readonly Queue<ScrapingCommand> _eventQueue;
 
         public ScraperManagerActor()
         {
-            _childrenByGuid = new Dictionary<Guid, ScrapingInfo>();
+            _childrenByGuid = new Dictionary<long, ScrapingInfo>();
             _childrenByActor = new Dictionary<IActorRef, ScrapingInfo>();
             _eventQueue = new Queue<ScrapingCommand>();
 
@@ -50,7 +51,7 @@ namespace Prognos.Engine
                     context.Watch(child);
 
                     var scrapingInfo = new ScrapingInfo(cmd, page, child);
-                    _childrenByGuid[cmd.PlatformEvent.Guid] = scrapingInfo;
+                    _childrenByGuid[cmd.PlatformEvent.Id] = scrapingInfo;
                     _childrenByActor[child] = scrapingInfo;
 
                     context.Self.Tell(new TryStartScraping());
@@ -61,7 +62,7 @@ namespace Prognos.Engine
             {
                 if (_childrenByActor.TryGetValue(e.ActorRef, out var info))
                 {
-                    _childrenByGuid.Remove(info.ScrapingCommand.PlatformEvent.Guid);
+                    _childrenByGuid.Remove(info.ScrapingCommand.PlatformEvent.Id);
                     _childrenByActor.Remove(info.Actor);
                     info.Page.Dispose();
                 }
@@ -78,20 +79,20 @@ namespace Prognos.Engine
             });
         }
 
-        private IPlatformEventScraper CreateScraper(Page page, ScrapingCommand cmd)
+        private IPlatformEventScraper CreateScraper(IPage page, ScrapingCommand cmd)
         {
             switch (cmd.PlatformEvent.Platform)
             {
-                case Platform.Winamax:
+                case Core.Platform.Winamax:
                     return new WinamaxEventScraper(page, cmd.PlatformEvent);
                 default:
                     throw new ArgumentException($"Unsupported platform: {cmd.PlatformEvent.Platform}");
             }
         }
 
-        private async Task<Browser> InitializeBrowserAsync()
+        private async Task<IBrowser> InitializeBrowserAsync()
         {
-            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultRevision);
+            await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
             return await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
         }
 
@@ -108,9 +109,10 @@ namespace Prognos.Engine
 
     public class ScrapingCommand
     {
-        public PlatformEvent PlatformEvent { get; }
+        public WinamaxEvent PlatformEvent { get; }
         public ScrapingOptions Options { get; }
-        public ScrapingCommand(PlatformEvent platformEvent, ScrapingOptions scrapingOptions)
+
+        public ScrapingCommand(WinamaxEvent platformEvent, ScrapingOptions scrapingOptions)
         {
             PlatformEvent = platformEvent;
             Options = scrapingOptions;
@@ -129,10 +131,10 @@ namespace Prognos.Engine
     public struct ScrapingInfo
     {
         public ScrapingCommand ScrapingCommand { get; }
-        public Page Page { get; }
+        public IPage Page { get; }
         public IActorRef Actor { get; }
 
-        public ScrapingInfo(ScrapingCommand scrapingCommand, Page page, IActorRef actor)
+        public ScrapingInfo(ScrapingCommand scrapingCommand, IPage page, IActorRef actor)
         {
             ScrapingCommand = scrapingCommand;
             Page = page;
